@@ -1,14 +1,17 @@
 package server
 
 import (
+	"context"
 	"log"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/tianxuz4808/developer-portal-backend/cmd/api"
+	"go.uber.org/zap"
 )
 
 type Server interface {
-	Run()
+	Run(context.Context, zap.Logger)
 }
 
 type server struct {
@@ -21,16 +24,16 @@ func NewServer(dynamodbClient dynamodb.Client) Server {
 	}
 }
 
-func (s *server) Run() {
+func (s *server) Run(ctx context.Context, logger zap.Logger) {
 	log.Println("starting server...")
 	mux := http.NewServeMux()
 
-	// clients := api.Clients{
-	// 	DynamoClient: &s.DynamodbClient,
-	// }
+	clients := api.Clients{
+		DynamoClient: &s.DynamodbClient,
+	}
 
 	mux.Handle("GET /list/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// clients.ListServices()
+		clients.ListServices(ctx, logger)
 	}))
 
 	err := http.ListenAndServe(":5000", mux)

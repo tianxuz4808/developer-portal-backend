@@ -74,7 +74,7 @@ func main() {
 	}
 
 	server := server.NewServer(*clients.DynamoClient)
-	server.Run()
+	server.Run(mainCtx, *logger)
 
 	log.Println("added a service")
 }

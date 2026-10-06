@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/tianxuz4808/developer-portal-backend/internal/logging"
 	services "github.com/tianxuz4808/developer-portal-backend/internal/service"
 	"go.uber.org/zap"
@@ -46,7 +47,17 @@ func (clients *Clients) WriteService(ctx context.Context, service services.Servi
 // ListServices will use the dynamodb scan() method to get the entire list from dynamo.
 func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]services.Service, error) {
 	startTime := time.Now()
-	_, err := clients.DynamoClient.Scan(ctx, &dynamodb.ScanInput{})
+	op, err := clients.DynamoClient.Scan(ctx, &dynamodb.ScanInput{
+		TableName:              aws.String(TABLE_NAME),
+		ReturnConsumedCapacity: types.ReturnConsumedCapacityTotal,
+	})
+
+	for i, service := range op.Items {
+		logger.Info("",
+			zap.Int("record", i),
+			zap.Any("service", service),
+		)
+	}
 
 	if err != nil {
 		return nil, err
