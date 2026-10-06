@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/tianxuz4808/developer-portal-backend/cmd/api"
+	"github.com/tianxuz4808/developer-portal-backend/internal/server"
 	services "github.com/tianxuz4808/developer-portal-backend/internal/service"
 	"go.uber.org/zap"
 )
@@ -57,6 +58,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("error is: %v", err)
 	}
+
+	server := server.NewServer()
+	server.Run()
 
 	log.Println("added a service")
 }
