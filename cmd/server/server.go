@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/tianxuz4808/developer-portal-backend/cmd/api"
 )
 
 type Server interface {
@@ -26,12 +25,12 @@ func (s *server) Run() {
 	log.Println("starting server...")
 	mux := http.NewServeMux()
 
-	clients := api.Clients{
-		DynamoClient: &s.DynamodbClient,
-	}
+	// clients := api.Clients{
+	// 	DynamoClient: &s.DynamodbClient,
+	// }
 
 	mux.Handle("GET /list/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		clients.ListServices()
+		// clients.ListServices()
 	}))
 
 	err := http.ListenAndServe(":5000", mux)
