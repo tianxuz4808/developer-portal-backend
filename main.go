@@ -59,7 +59,7 @@ func main() {
 		log.Fatalf("error is: %v", err)
 	}
 
-	server := server.NewServer()
+	server := server.NewServer(*clients.DynamoClient)
 	server.Run()
 
 	log.Println("added a service")

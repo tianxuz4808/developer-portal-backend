@@ -14,6 +14,8 @@ type Clients struct {
 	DynamoClient *dynamodb.Client
 }
 
+const TABLE_NAME = "services"
+
 func (clients *Clients) WriteService(ctx context.Context, service services.Service) error {
 	item, err := attributevalue.MarshalMap(map[string]any{
 		"id": service.ID.String(),
@@ -26,7 +28,7 @@ func (clients *Clients) WriteService(ctx context.Context, service services.Servi
 	}
 
 	_, err = clients.DynamoClient.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String("services"),
+		TableName: aws.String(TABLE_NAME),
 		Item:      item,
 	})
 	if err != nil {
@@ -36,4 +38,8 @@ func (clients *Clients) WriteService(ctx context.Context, service services.Servi
 	log.Printf("finished adding: %v\n", service)
 
 	return nil
+}
+
+func (clients *Clients) ListServices() {
+	log.Println("listing out the services...")
 }
