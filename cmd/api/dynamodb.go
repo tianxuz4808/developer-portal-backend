@@ -66,46 +66,43 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 	return nil, nil
 }
 
+// the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
+const AWS_DYNAMODB_BATCH_LIMIT = 20
+
 func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) error {
 
 	logger.Info("the batch services from the request is: ",
 		zap.Any("request-batch-services", batchServices),
 	)
-	requests := []types.WriteRequest{}
+	// this is just for testing...
 	if len(batchServices) == 0 {
 		// this is simply for testing. if the size is zero, i'll generate a shit ton of services to try stress the process out
-		for i := 0; i < 20; i++ {
+		for i := 0; i < AWS_DYNAMODB_BATCH_LIMIT; i++ {
 			randPart := local.GenerateRandomString(5)
 			serviceName := fmt.Sprintf("%s-service", randPart)
 
 			newRandService := services.NewService(serviceName, local.GenerateRandomString(5)+"-owner")
 
-			requestService, err := attributevalue.MarshalMap(newRandService.DynamoItemService())
-			if err != nil {
-				return err
-			}
-			requests = append(requests, types.WriteRequest{
-				PutRequest: &types.PutRequest{
-					Item: requestService,
-				},
-			})
+			batchServices = append(batchServices, newRandService)
 		}
-	} else {
-		// this is the real logical block when i want i remove the if above
-		for _, service := range batchServices {
-			newService := services.NewService(service.Name, service.Owner)
+	}
 
-			requestService, err := attributevalue.MarshalMap(newService.DynamoItemService())
-			if err != nil {
-				return err
-			}
+	requests := []types.WriteRequest{}
 
-			requests = append(requests, types.WriteRequest{
-				PutRequest: &types.PutRequest{
-					Item: requestService,
-				},
-			})
+	// this is the real logical block when i want i remove the if above
+	for _, service := range batchServices {
+		newService := services.NewService(service.Name, service.Owner)
+
+		requestService, err := attributevalue.MarshalMap(newService.DynamoItemService())
+		if err != nil {
+			return err
 		}
+
+		requests = append(requests, types.WriteRequest{
+			PutRequest: &types.PutRequest{
+				Item: requestService,
+			},
+		})
 	}
 
 	startTime := time.Now()

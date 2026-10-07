@@ -60,7 +60,7 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 		}
 	}))
 
-	err := http.ListenAndServe(":5000", mux)
+	err := http.ListenAndServe(":8080", mux)
 	if err != nil {
 		log.Fatal(err)
 	}
