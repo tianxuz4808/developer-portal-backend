@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/tianxuz4808/developer-portal-backend/internal/local"
 	"github.com/tianxuz4808/developer-portal-backend/internal/logging"
 	services "github.com/tianxuz4808/developer-portal-backend/internal/service"
 	"go.uber.org/zap"
@@ -20,7 +22,7 @@ type Clients struct {
 
 const TABLE_NAME = "services"
 
-func (clients *Clients) WriteService(ctx context.Context, service services.Service) error {
+func (clients *Clients) WriteService(ctx context.Context, logger zap.Logger, service services.Service) error {
 	item, err := attributevalue.MarshalMap(map[string]any{
 		"id":         service.ID.String(),
 		"name":       service.Name,
@@ -62,8 +64,51 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 	if err != nil {
 		return nil, err
 	}
-	log.Println("listing out the services...")
 	endTime := time.Now()
 	logging.LogTimeTaken(logger, startTime, endTime)
 	return nil, nil
+}
+
+func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) error {
+
+	logger.Info("the batch services from the request is: ",
+		zap.Any("request-batch-services", batchServices),
+	)
+	requests := []types.WriteRequest{}
+	if len(batchServices) == 0 {
+		// this is simply for testing. if the size is zero, i'll generate a shit ton of services to try stress the process out
+		for i := 0; i < 2500; i++ {
+			randPart := local.GenerateRandomString(5)
+			serviceName := fmt.Sprintf("%s-service", randPart)
+
+			newRandService := services.NewService(serviceName, local.GenerateRandomString(5)+"-owner")
+
+			requestService, err := attributevalue.MarshalMap(newRandService)
+			if err != nil {
+				return err
+			}
+			requests = append(requests, types.WriteRequest{
+				PutRequest: &types.PutRequest{
+					Item: requestService,
+				},
+			})
+		}
+		startTime := time.Now()
+
+		clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]types.WriteRequest{
+				"batch-write": requests,
+			},
+		})
+
+		logger.Info("finished writing batch items: ",
+			zap.Any("batch-services", requests),
+		)
+
+		endTime := time.Now()
+		logging.LogTimeTaken(logger, startTime, endTime)
+
+	}
+
+	return nil
 }

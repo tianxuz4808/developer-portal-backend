@@ -1,0 +1,10 @@
+[
+  {
+    "name": "service1",
+    "owner": "matt"
+  },
+  {
+    "name": "service2",
+    "owner": "john"
+  }
+]
