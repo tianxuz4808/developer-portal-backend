@@ -40,23 +40,24 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 
 	mux.Handle("POST /services/batch/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		// body, _ := io.ReadAll(r.Body)
-		// logger.Info("", zap.String("body", string(body)))
 		var batchServices []services.Service
 
 		err := json.NewDecoder(r.Body).Decode(&batchServices)
 
 		if err != nil {
-			// logger.Fatal("could not decode the batch services to write to dynamo",
-			// 	zap.Error(err),
-			// )
 			w.Write([]byte("There was an error processing your batch services request body"))
+			return
 		}
 
 		logger.Info("Retrieved batch services from request",
 			zap.Any("batch-services", batchServices),
 		)
-		clients.CreateBatchServices(ctx, logger, batchServices)
+		err = clients.CreateBatchServices(ctx, logger, batchServices)
+		if err != nil {
+			log.Fatal("There was an error processing creating the batch services",
+				zap.Error(err),
+			)
+		}
 	}))
 
 	err := http.ListenAndServe(":5000", mux)

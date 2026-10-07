@@ -25,9 +25,6 @@ func main() {
 
 	dynamodbEndpoint := os.Getenv("DYNAMODB_ENDPOINT")
 	awsRegion := os.Getenv("AWS_REGION")
-	log.Println("the dynamo endpoint from the env var is: ", dynamodbEndpoint)
-	log.Println("the aws region is: ", awsRegion)
-	log.Println("creating a new service...")
 	logger.Info("the aws credentials are: ",
 		zap.String("Dynamodb Endpoint", dynamodbEndpoint),
 		zap.String("Aws Region", awsRegion),
