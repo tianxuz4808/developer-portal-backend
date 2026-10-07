@@ -23,12 +23,7 @@ type Clients struct {
 const TABLE_NAME = "services"
 
 func (clients *Clients) WriteService(ctx context.Context, logger zap.Logger, service services.Service) error {
-	item, err := attributevalue.MarshalMap(map[string]any{
-		"id":         service.ID.String(),
-		"name":       service.Name,
-		"owner":      service.Owner,
-		"created_at": service.CreatedAt,
-	})
+	item, err := attributevalue.MarshalMap(service.DynamoItemService())
 	if err != nil {
 		return err
 	}
@@ -85,12 +80,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 
 			newRandService := services.NewService(serviceName, local.GenerateRandomString(5)+"-owner")
 
-			requestService, err := attributevalue.MarshalMap(map[string]any{
-				"id":         newRandService.ID.String(),
-				"name":       newRandService.Name,
-				"owner":      newRandService.Owner,
-				"created_at": newRandService.CreatedAt,
-			})
+			requestService, err := attributevalue.MarshalMap(newRandService.DynamoItemService())
 			if err != nil {
 				return err
 			}
@@ -105,7 +95,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		for _, service := range batchServices {
 			newService := services.NewService(service.Name, service.Owner)
 
-			requestService, err := attributevalue.MarshalMap(newService)
+			requestService, err := attributevalue.MarshalMap(newService.DynamoItemService())
 			if err != nil {
 				return err
 			}

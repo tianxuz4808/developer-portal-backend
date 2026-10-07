@@ -1,4 +1,4 @@
-package services
+package service
 
 import (
 	"time"
@@ -21,5 +21,14 @@ func NewService(name string, owner string) Service {
 		Name:      name,
 		Owner:     owner,
 		CreatedAt: time.Now(),
+	}
+}
+
+func (s Service) DynamoItemService() map[string]any {
+	return map[string]any{
+		"id": s.ID.String(),
+		"name": s.Name,
+		"owner": s.Owner,
+		"created_at": s.CreatedAt,
 	}
 }
