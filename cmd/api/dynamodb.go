@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -53,19 +54,24 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 		ReturnConsumedCapacity: types.ReturnConsumedCapacityTotal,
 	})
 
-	for i, service := range op.Items {
+	allServices := []services.Service{}
+	for i, unmarshaledServices := range op.Items {
+		var service services.Service
+		attributevalue.UnmarshalMap(unmarshaledServices, &service)
+		allServices = append(allServices, service)
 		logger.Info("",
 			zap.Int("record", i),
-			zap.Any("service", service),
+			zap.Any("service", unmarshaledServices),
 		)
 	}
 
 	if err != nil {
 		return nil, err
 	}
+
 	endTime := time.Now()
 	logging.LogTimeTaken(logger, startTime, endTime)
-	return nil, nil
+	return allServices, nil
 }
 
 // the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
@@ -111,8 +117,6 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		zap.Any("requests", requests),
 	)
 
-	job := []types.WriteRequest{}
-
 	work := func(ctx context.Context, logger zap.Logger, jobs []types.WriteRequest) error {
 		if len(jobs) == 0 {
 			return nil
@@ -128,28 +132,27 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		})
 
 		if err != nil {
-			// return err
-			logger.Fatal("error writing batch items to dynamo",
+			logger.Error("error writing batch items to dynamo",
 				zap.Error(err),
 			)
+			return err
 		}
 
 		return nil
 	}
-
+	var waitGroup sync.WaitGroup
+	job := []types.WriteRequest{}
 	// splitting up the batchServices into jobs of size AWS_DYNAMODB_BATCH_LIMIT
 	for i, request := range requests {
-		relativeIndex := i % AWS_DYNAMODB_BATCH_LIMIT
-		logger.Info("",
-			zap.Int("relativeIndex", relativeIndex),
-		)
 		job = append(job, request)
-		if relativeIndex == 0 || i == len(requests)-1 {
-			go work(ctx, logger, job)
+		if len(job) == AWS_DYNAMODB_BATCH_LIMIT || i == len(requests)-1 {
+			batch := job
+			waitGroup.Go(func() { work(ctx, logger, batch) })
 			job = []types.WriteRequest{}
-
 		}
 	}
+
+	waitGroup.Wait()
 
 	logger.Info("finished writing batch items: ",
 		zap.Any("batch-services", requests),

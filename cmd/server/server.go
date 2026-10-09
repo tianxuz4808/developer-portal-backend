@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -35,7 +36,14 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 	}
 
 	mux.Handle("GET /services/list/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		clients.ListServices(ctx, logger)
+		services, err := clients.ListServices(ctx, logger)
+		if err != nil {
+			strErr := fmt.Sprintf("There was an error processing your request: ", err.Error())
+			w.Write([]byte(strErr))
+		}
+
+		retStr := fmt.Sprintf("The amount of services collected are: ", len(services))
+		w.Write([]byte(retStr))
 	}))
 
 	mux.Handle("POST /services/batch/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
