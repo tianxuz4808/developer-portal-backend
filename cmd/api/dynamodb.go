@@ -117,8 +117,9 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		zap.Any("requests", requests),
 	)
 
-	work := func(ctx context.Context, logger zap.Logger, jobs []types.WriteRequest) error {
+	work := func(ctx context.Context, logger zap.Logger, jobs []types.WriteRequest, sem chan<- struct{}) error {
 		if len(jobs) == 0 {
+			sem <- struct{}{}
 			return nil
 		}
 
@@ -135,24 +136,53 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 			logger.Error("error writing batch items to dynamo",
 				zap.Error(err),
 			)
+
+			sem <- struct{}{}
+			// errsCh <- err
 			return err
 		}
 
+		sem <- struct{}{}
 		return nil
 	}
+
 	var waitGroup sync.WaitGroup
 	job := []types.WriteRequest{}
+	const MAX_DYNAMODB_CLIENTS = 3
+	sem := make(chan struct{}, MAX_DYNAMODB_CLIENTS)
+	// numTasks := (len(requests) + MAX_DYNAMODB_CLIENTS - 1) / MAX_DYNAMODB_CLIENTS
+	// allErrors := make(chan error, numTasks)
 	// splitting up the batchServices into jobs of size AWS_DYNAMODB_BATCH_LIMIT
 	for i, request := range requests {
 		job = append(job, request)
 		if len(job) == AWS_DYNAMODB_BATCH_LIMIT || i == len(requests)-1 {
 			batch := job
-			waitGroup.Go(func() { work(ctx, logger, batch) })
+
+			// just practice for adding a job NOT using the waitGroup.Go()
+			waitGroup.Add(1)
+			go func() {
+				defer waitGroup.Done()
+				work(ctx, logger, batch, sem)
+				<-sem
+			}()
+
+			// waitGroup.Go(func() {
+			// 	// defer waitGroup.Done()
+			// 	work(ctx, logger, batch, sem) // allErrors
+
+			// 	<-sem
+			// })
 			job = []types.WriteRequest{}
 		}
 	}
-
 	waitGroup.Wait()
+
+	// close(allErrors)
+	// close(sem)
+
+	// for err := range allErrors {
+	// 	logger.Error(err.Error())
+	// }
 
 	logger.Info("finished writing batch items: ",
 		zap.Any("batch-services", requests),
