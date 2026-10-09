@@ -66,6 +66,10 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 	return nil, nil
 }
 
+func worker() {
+
+}
+
 // the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
 const AWS_DYNAMODB_BATCH_LIMIT = 20
 
@@ -77,7 +81,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 	// this is just for testing...
 	if len(batchServices) == 0 {
 		// this is simply for testing. if the size is zero, i'll generate a shit ton of services to try stress the process out
-		for i := 0; i < AWS_DYNAMODB_BATCH_LIMIT; i++ {
+		for i := 0; i < 10000; i++ {
 			randPart := local.GenerateRandomString(5)
 			serviceName := fmt.Sprintf("%s-service", randPart)
 
@@ -90,9 +94,10 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 	requests := []types.WriteRequest{}
 
 	// this is the real logical block when i want i remove the if above
+	startTime := time.Now()
+
 	for _, service := range batchServices {
 		newService := services.NewService(service.Name, service.Owner)
-
 		requestService, err := attributevalue.MarshalMap(newService.DynamoItemService())
 		if err != nil {
 			return err
@@ -104,17 +109,24 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 			},
 		})
 	}
+	logger.Info("the requests are",
+		zap.Any("requests", requests),
+	)
 
-	startTime := time.Now()
+	job := []types.WriteRequest{}
 
-	_, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]types.WriteRequest{
-			TABLE_NAME: requests,
-		},
-	})
+	// splitting up the batchServices into jobs of size AWS_DYNAMODB_BATCH_LIMIT
+	for i, request := range requests {
+		relativeIndex := i % AWS_DYNAMODB_BATCH_LIMIT
+		logger.Info("",
+			zap.Int("relativeIndex", relativeIndex),
+		)
+		job = append(job, request)
+		if relativeIndex == 0 || i == len(requests)-1 {
+			go clients.work(ctx, logger, job)
+			job = []types.WriteRequest{}
 
-	if err != nil {
-		return err
+		}
 	}
 
 	logger.Info("finished writing batch items: ",
@@ -123,6 +135,29 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 
 	endTime := time.Now()
 	logging.LogTimeTaken(logger, startTime, endTime)
+
+	return nil
+}
+
+func (clients *Clients) work(ctx context.Context, logger zap.Logger, jobs []types.WriteRequest) error {
+	if len(jobs) == 0 {
+		return nil
+	}
+
+	// need to do this bc jobs can contain WriteRequests's with null values which is not valid
+
+	_, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+		RequestItems: map[string][]types.WriteRequest{
+			TABLE_NAME: jobs,
+		},
+	})
+
+	if err != nil {
+		// return err
+		logger.Fatal("error writing batch items to dynamo",
+			zap.Error(err),
+		)
+	}
 
 	return nil
 }

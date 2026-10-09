@@ -11,6 +11,33 @@ services:
       AWS_SECRET_ACCESS_KEY: dummy
       AWS_REGION: us-east-1
       DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+    depends_on:
+      - dynamodb-local
+
+  developer-portal-debug:
+    build: .
+    image: developer-portal-debug
+    command:
+      - dlv
+      - exec
+      - /developer-portal-backend
+      - --headless
+      - --listen=:40000
+      - --api-version=2
+      - --accept-multiclient
+    ports:
+      - "9080:8080"
+      - "40000:40000"
+    environment:
+      AWS_ACCESS_KEY_ID: dummy
+      AWS_SECRET_ACCESS_KEY: dummy
+      AWS_REGION: us-east-1
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+    # these 2 are required to allow delve to debug inside a docker container
+    security_opt:
+      - seccomp:unconfined
+    cap_add:
+      - SYS_PTRACE
     depends_on: 
       - dynamodb-local
   dynamodb-local:

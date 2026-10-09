@@ -9,13 +9,19 @@ WORKDIR /app
 
 COPY . .
 
-RUN GOOS=linux GOARCH=amd64 go build -o developer-portal-backend
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
+RUN go build -gcflags="all=-N -l" -o developer-portal-backend
 
 # stage 2: run the go binary
 # Taks: This involves creating a new stage, retrieving the built go binary, 
 
 FROM alpine:latest
 
+COPY --from=builder /go/bin/dlv /usr/local/bin/dlv
 COPY --from=builder /app/developer-portal-backend /developer-portal-backend
+EXPOSE 40000
+EXPOSE 8080
 
-ENTRYPOINT [ "/developer-portal-backend" ]
+# CMD ["dlv", "exec", "/developer-portal-backend", "--headless", "--listen=:40000", "--api-version=2", "--accept-multiclient"]
+CMD [ "/developer-portal-backend" ]
