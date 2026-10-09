@@ -45,6 +45,10 @@ func (clients *Clients) WriteService(ctx context.Context, logger zap.Logger, ser
 func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]services.Service, error) {
 	startTime := time.Now()
 
+	// Starting to write the fan-out fan-in method to grab large amounts of services in go.
+
+
+
 	// TODO: add parallel processing for large amounts of services
 	op, err := clients.DynamoClient.Scan(ctx, &dynamodb.ScanInput{
 		TableName:              aws.String(TABLE_NAME),
@@ -145,7 +149,8 @@ func (clients *Clients) work(ctx context.Context, logger zap.Logger, jobs []type
 	}
 
 	// need to do this bc jobs can contain WriteRequests's with null values which is not valid
-
+	// TODO: BatchWriteItem returns a list of items that were not written. I need to be able to get those items and retry.
+	// There can also be the case of throttling in which i need some kind of backoff / exponential back off.
 	_, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
 		RequestItems: map[string][]types.WriteRequest{
 			TABLE_NAME: jobs,
