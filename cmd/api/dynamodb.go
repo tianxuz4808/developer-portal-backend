@@ -76,25 +76,64 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 	return allServices, nil
 }
 
+// testing function, should move this later
+func generateRandomServices(limit int) []services.Service {
+
+	batchServices := []services.Service{}
+	for i := 0; i < limit; i++ {
+		randPart := strconv.Itoa(i) + local.GenerateRandomString(5)
+		serviceName := fmt.Sprintf("%s-service", randPart)
+
+		newRandService := services.NewService(serviceName, local.GenerateRandomString(5)+"-owner")
+
+		batchServices = append(batchServices, newRandService)
+	}
+
+	return batchServices
+}
+
+func generateRandomDynamoServiceWrites(limit int) ([]types.WriteRequest, error) {
+	randServices := generateRandomServices(limit)
+	allPuts := []types.WriteRequest{}
+	for _, service := range randServices {
+		putItem, err := serviceToDynamoWriteRequest(service)
+		if err != nil {
+			return nil, err
+		}
+
+		allPuts = append(allPuts, putItem)
+	}
+
+	return allPuts, nil
+}
+
+func serviceToDynamoWriteRequest(service services.Service) (types.WriteRequest, error) {
+	dynamoItem, err := attributevalue.MarshalMap(dynamoService.ConvFromService(service))
+	if err != nil {
+		return types.WriteRequest{}, err
+	}
+
+	writeRequest := types.WriteRequest{
+		PutRequest: &types.PutRequest{
+			Item: dynamoItem,
+		},
+	}
+
+	return writeRequest, nil
+}
+
 // the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
-const AWS_DYNAMODB_BATCH_LIMIT = 26
+const AWS_DYNAMODB_BATCH_LIMIT = 20
 
 func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) []error {
 
 	logger.Info("the batch services from the request is: ",
 		zap.Any("request-batch-services", batchServices),
 	)
-	// this is just for testing...
+
+	// for testing. if the size is zero, i'll generate a shit ton of services to try stress the process out
 	if len(batchServices) == 0 {
-		// this is simply for testing. if the size is zero, i'll generate a shit ton of services to try stress the process out
-		for i := 0; i < 10000; i++ {
-			randPart := strconv.Itoa(i) + local.GenerateRandomString(5)
-			serviceName := fmt.Sprintf("%s-service", randPart)
-
-			newRandService := services.NewService(serviceName, local.GenerateRandomString(5)+"-owner")
-
-			batchServices = append(batchServices, newRandService)
-		}
+		batchServices = generateRandomServices(10)
 	}
 
 	requests := []types.WriteRequest{}
@@ -104,16 +143,13 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 
 	for _, service := range batchServices {
 		newService := services.NewService(service.Name, service.Owner)
-		requestService, err := attributevalue.MarshalMap(dynamoService.ConvFromService(newService))
+		// requestService, err := attributevalue.MarshalMap(dynamoService.ConvFromService(newService))
+		putItem, err := serviceToDynamoWriteRequest(newService)
 		if err != nil {
 			return []error{err}
 		}
 
-		requests = append(requests, types.WriteRequest{
-			PutRequest: &types.PutRequest{
-				Item: requestService,
-			},
-		})
+		requests = append(requests, putItem)
 	}
 	logger.Info("the requests are",
 		zap.Any("requests", requests),
@@ -144,6 +180,16 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 			return nil, err
 		}
 
+		// SOLEY FOR TESTING WHETHER MY UNPROCCESSED ITEMS WORKS
+		randomUnproccessedItems, err := generateRandomDynamoServiceWrites(3)
+		if err != nil {
+			return nil, err
+		}
+
+		opt.UnprocessedItems = map[string][]types.WriteRequest{TABLE_NAME: randomUnproccessedItems}
+
+		// END SOLELY FOR TESTING
+
 		return opt.UnprocessedItems[TABLE_NAME], nil
 	}
 
@@ -173,6 +219,15 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 				} else {
 					allErrors <- nil
 				}
+				if len(unprocessedItems) == 0 {
+					return
+				}
+				retryItem := dynamoRetryItem{
+					items:     unprocessedItems,
+					numTries:  1,
+					lastTried: time.Now(),
+				}
+				clients.RetryDynamoUnprocessedItems(ctx, logger, &retryItem)
 				logger.Info("", zap.Any("unprocessedItems", unprocessedItems))
 
 			}()
@@ -210,4 +265,50 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 	logging.LogTimeTaken(logger, startTime, endTime)
 
 	return nil
+}
+
+type dynamoRetryItem struct {
+	items     []types.WriteRequest
+	numTries  int
+	lastTried time.Time
+}
+
+const MAX_RETRY_LIMIT = 3
+const RETRY_TIME_LIMIT = time.Second * 15
+
+func (clients *Clients) RetryDynamoUnprocessedItems(ctx context.Context, logger zap.Logger, unprocessedItems *dynamoRetryItem) (*dynamoRetryItem, error) {
+	if unprocessedItems == nil {
+		return nil, nil
+	}
+
+	if unprocessedItems.numTries >= 3 {
+		return unprocessedItems, fmt.Errorf("Unable to process your batch write. Maximum number of retries attempted to dynamo")
+	}
+
+	unprocessedTime := unprocessedItems.lastTried
+	timeToProcessAgain := unprocessedTime.Add(RETRY_TIME_LIMIT)
+
+	if time.Now().Compare(timeToProcessAgain) == -1 {
+		logger.Info("we are sleeping until we are allowed to write to dynamo again based off the RETRY_TIME_LIMIT")
+	}
+
+	for time.Now().Compare(timeToProcessAgain) == -1 {
+
+	}
+
+	opt, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+		RequestItems: map[string][]types.WriteRequest{
+			TABLE_NAME: unprocessedItems.items,
+		},
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	unprocessedItems.items = opt.UnprocessedItems[TABLE_NAME]
+	unprocessedItems.numTries += 1
+	unprocessedItems.lastTried = time.Now()
+
+	return clients.RetryDynamoUnprocessedItems(ctx, logger, unprocessedItems)
 }
