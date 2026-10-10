@@ -75,7 +75,7 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 }
 
 // the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
-const AWS_DYNAMODB_BATCH_LIMIT = 26
+const AWS_DYNAMODB_BATCH_LIMIT = 20
 
 func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) error {
 
@@ -117,15 +117,17 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		zap.Any("requests", requests),
 	)
 
-	work := func(ctx context.Context, logger zap.Logger, jobs []types.WriteRequest) error {
+	// work batch writes to dynamodb. The request takes in jobs or requests to write to dynamo and 
+	// returns a slice of unprocessed items along with an error if there is any
+	work := func(ctx context.Context, logger zap.Logger, jobs []types.WriteRequest) ([]types.WriteRequest, error) {
 		if len(jobs) == 0 {
-			return nil
+			return nil, nil
 		}
 
 		// need to do this bc jobs can contain WriteRequests's with null values which is not valid
 		// TODO: BatchWriteItem returns a list of items that were not written. I need to be able to get those items and retry.
 		// There can also be the case of throttling in which i need some kind of backoff / exponential back off.
-		_, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+		opt, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
 			RequestItems: map[string][]types.WriteRequest{
 				TABLE_NAME: jobs,
 			},
@@ -137,10 +139,10 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 			)
 
 			// errsCh <- err
-			return err
+			return nil, err
 		}
 
-		return nil
+		return opt.UnprocessedItems[TABLE_NAME], nil
 	}
 
 	var waitGroup sync.WaitGroup
@@ -163,12 +165,13 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 				defer func() {
 					<-sem
 				}()
-				err := work(ctx, logger, batch)
+				unprocessedItems, err := work(ctx, logger, batch)
 				if err != nil {
 					allErrors <- err
 				} else {
 					allErrors <- nil
 				}
+				logger.Info("", zap.Any("unprocessedItems", unprocessedItems))
 
 			}()
 
