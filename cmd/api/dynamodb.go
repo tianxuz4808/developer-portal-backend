@@ -77,7 +77,7 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 }
 
 // the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
-const AWS_DYNAMODB_BATCH_LIMIT = 20
+const AWS_DYNAMODB_BATCH_LIMIT = 26
 
 func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) []error {
 
@@ -196,6 +196,10 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		if cErr != nil {
 			errs = append(errs, cErr)
 		}
+	}
+
+	if len(errs) > 0 {
+		return errs
 	}
 
 	logger.Info("finished writing batch items: ",
