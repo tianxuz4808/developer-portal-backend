@@ -60,12 +60,16 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 		logger.Info("Retrieved batch services from request",
 			zap.Any("batch-services", batchServices),
 		)
-		err = clients.CreateBatchServices(ctx, logger, batchServices)
-		if err != nil {
-			log.Fatal("There was an error processing creating the batch services",
-				zap.Error(err),
-			)
+		errs := clients.CreateBatchServices(ctx, logger, batchServices)
+		if errs != nil && len(errs) != 0 {
+			e := fmt.Errorf("errors occured while laying batch services: %+v", err)
+			w.Write([]byte(e.Error()))
 		}
+		// if err != nil {
+		// 	log.Fatal("There was an error processing creating the batch services",
+		// 		zap.Error(err),
+		// 	)
+		// }
 	}))
 
 	err := http.ListenAndServe(":8080", mux)

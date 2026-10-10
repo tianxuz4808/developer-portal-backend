@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	dynamoService "github.com/tianxuz4808/developer-portal-backend/internal/dynamodb"
 	"github.com/tianxuz4808/developer-portal-backend/internal/local"
 	"github.com/tianxuz4808/developer-portal-backend/internal/logging"
 	services "github.com/tianxuz4808/developer-portal-backend/internal/service"
@@ -24,7 +26,7 @@ type Clients struct {
 const TABLE_NAME = "services"
 
 func (clients *Clients) WriteService(ctx context.Context, logger zap.Logger, service services.Service) error {
-	item, err := attributevalue.MarshalMap(service.DynamoItemService())
+	item, err := attributevalue.MarshalMap(dynamoService.ConvFromService(service))
 	if err != nil {
 		return err
 	}
@@ -54,6 +56,10 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 		ReturnConsumedCapacity: types.ReturnConsumedCapacityTotal,
 	})
 
+	if err != nil {
+		return nil, err
+	}
+
 	allServices := []services.Service{}
 	for i, unmarshaledServices := range op.Items {
 		var service services.Service
@@ -65,10 +71,6 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 		)
 	}
 
-	if err != nil {
-		return nil, err
-	}
-
 	endTime := time.Now()
 	logging.LogTimeTaken(logger, startTime, endTime)
 	return allServices, nil
@@ -77,7 +79,7 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 // the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
 const AWS_DYNAMODB_BATCH_LIMIT = 20
 
-func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) error {
+func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) []error {
 
 	logger.Info("the batch services from the request is: ",
 		zap.Any("request-batch-services", batchServices),
@@ -86,7 +88,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 	if len(batchServices) == 0 {
 		// this is simply for testing. if the size is zero, i'll generate a shit ton of services to try stress the process out
 		for i := 0; i < 10000; i++ {
-			randPart := local.GenerateRandomString(5)
+			randPart := strconv.Itoa(i) + local.GenerateRandomString(5)
 			serviceName := fmt.Sprintf("%s-service", randPart)
 
 			newRandService := services.NewService(serviceName, local.GenerateRandomString(5)+"-owner")
@@ -102,9 +104,9 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 
 	for _, service := range batchServices {
 		newService := services.NewService(service.Name, service.Owner)
-		requestService, err := attributevalue.MarshalMap(newService.DynamoItemService())
+		requestService, err := attributevalue.MarshalMap(dynamoService.ConvFromService(newService))
 		if err != nil {
-			return err
+			return []error{err}
 		}
 
 		requests = append(requests, types.WriteRequest{
@@ -117,7 +119,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		zap.Any("requests", requests),
 	)
 
-	// work batch writes to dynamodb. The request takes in jobs or requests to write to dynamo and 
+	// work batch writes to dynamodb. The request takes in jobs or requests to write to dynamo and
 	// returns a slice of unprocessed items along with an error if there is any
 	work := func(ctx context.Context, logger zap.Logger, jobs []types.WriteRequest) ([]types.WriteRequest, error) {
 		if len(jobs) == 0 {
@@ -189,9 +191,10 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 	close(allErrors)
 	// close(sem)
 
-	for err := range allErrors {
-		if err != nil {
-			logger.Error(err.Error())
+	errs := []error{}
+	for cErr := range allErrors {
+		if cErr != nil {
+			errs = append(errs, cErr)
 		}
 	}
 
