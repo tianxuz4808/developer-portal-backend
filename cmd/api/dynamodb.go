@@ -75,7 +75,7 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 }
 
 // the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
-const AWS_DYNAMODB_BATCH_LIMIT = 20
+const AWS_DYNAMODB_BATCH_LIMIT = 26
 
 func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) error {
 
@@ -147,8 +147,8 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 	job := []types.WriteRequest{}
 	const MAX_DYNAMODB_CLIENTS = 5
 	sem := make(chan struct{}, MAX_DYNAMODB_CLIENTS)
-	// numTasks := (len(requests) + AWS_DYNAMODB_BATCH_LIMIT - 1) / AWS_DYNAMODB_BATCH_LIMIT
-	// allErrors := make(chan error, numTasks)
+	numTasks := (len(requests) + AWS_DYNAMODB_BATCH_LIMIT - 1) / AWS_DYNAMODB_BATCH_LIMIT
+	allErrors := make(chan error, numTasks)
 	// splitting up the batchServices into jobs of size AWS_DYNAMODB_BATCH_LIMIT
 	for i, request := range requests {
 		job = append(job, request)
@@ -164,11 +164,10 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 					<-sem
 				}()
 				err := work(ctx, logger, batch)
-
 				if err != nil {
-					// allErrors <- err
+					allErrors <- err
 				} else {
-					// allErrors <- nil
+					allErrors <- nil
 				}
 
 			}()
@@ -184,14 +183,14 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 	}
 	waitGroup.Wait()
 
-	// close(allErrors)
+	close(allErrors)
 	// close(sem)
 
-	// for err := range allErrors {
-	// 	if err != nil {
-	// 		logger.Error(err.Error())
-	// 	}
-	// }
+	for err := range allErrors {
+		if err != nil {
+			logger.Error(err.Error())
+		}
+	}
 
 	logger.Info("finished writing batch items: ",
 		zap.Any("batch-services", requests),
