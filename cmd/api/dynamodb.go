@@ -21,11 +21,12 @@ import (
 
 type Clients struct {
 	DynamoClient *dynamodb.Client
+	Logger       zap.Logger
 }
 
 const TABLE_NAME = "services"
 
-func (clients *Clients) WriteService(ctx context.Context, logger zap.Logger, service services.Service) error {
+func (clients *Clients) WriteService(ctx context.Context, service services.Service) error {
 	item, err := attributevalue.MarshalMap(dynamoService.ConvFromService(service))
 	if err != nil {
 		return err
@@ -45,7 +46,7 @@ func (clients *Clients) WriteService(ctx context.Context, logger zap.Logger, ser
 }
 
 // ListServices will use the dynamodb scan() method to get the entire list from dynamo.
-func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]services.Service, error) {
+func (clients *Clients) ListServices(ctx context.Context) ([]services.Service, error) {
 	startTime := time.Now()
 
 	// Starting to write the fan-out fan-in method to grab large amounts of services in go.
@@ -65,14 +66,14 @@ func (clients *Clients) ListServices(ctx context.Context, logger zap.Logger) ([]
 		var service services.Service
 		attributevalue.UnmarshalMap(unmarshaledServices, &service)
 		allServices = append(allServices, service)
-		logger.Info("",
+		clients.Logger.Info("",
 			zap.Int("record", i),
 			zap.Any("service", unmarshaledServices),
 		)
 	}
 
 	endTime := time.Now()
-	logging.LogTimeTaken(logger, startTime, endTime)
+	logging.LogTimeTaken(clients.Logger, startTime, endTime)
 	return allServices, nil
 }
 
@@ -125,9 +126,9 @@ func serviceToDynamoWriteRequest(service services.Service) (types.WriteRequest, 
 // the true batch limit for the BatchWriteItem() function is 25, but i'm using 20 just to be safe
 const AWS_DYNAMODB_BATCH_LIMIT = 20
 
-func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logger, batchServices []services.Service) []error {
+func (clients *Clients) CreateBatchServices(ctx context.Context, batchServices []services.Service) []error {
 
-	logger.Info("the batch services from the request is: ",
+	clients.Logger.Info("the batch services from the request is: ",
 		zap.Any("request-batch-services", batchServices),
 	)
 
@@ -151,13 +152,13 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 
 		requests = append(requests, putItem)
 	}
-	logger.Info("the requests are",
+	clients.Logger.Info("the requests are",
 		zap.Any("requests", requests),
 	)
 
 	// work batch writes to dynamodb. The request takes in jobs or requests to write to dynamo and
 	// returns a slice of unprocessed items along with an error if there is any
-	work := func(ctx context.Context, logger zap.Logger, jobs []types.WriteRequest) ([]types.WriteRequest, error) {
+	work := func(ctx context.Context, jobs []types.WriteRequest) ([]types.WriteRequest, error) {
 		if len(jobs) == 0 {
 			return nil, nil
 		}
@@ -172,7 +173,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		})
 
 		if err != nil {
-			logger.Error("error writing batch items to dynamo",
+			clients.Logger.Error("error writing batch items to dynamo",
 				zap.Error(err),
 			)
 
@@ -213,7 +214,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 				defer func() {
 					<-sem
 				}()
-				unprocessedItems, err := work(ctx, logger, batch)
+				unprocessedItems, err := work(ctx, batch)
 				if err != nil {
 					allErrors <- err
 				} else {
@@ -227,11 +228,12 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 					retries:   0,
 					lastTried: time.Now(),
 				}
-				clients.RetryDynamoUnprocessedItems(ctx, logger, &retryItem)
-				logger.Info("", zap.Any("unprocessedItems", unprocessedItems))
+				clients.RetryDynamoUnprocessedItems(ctx, &retryItem)
+				clients.Logger.Info("", zap.Any("unprocessedItems", unprocessedItems))
 
 			}()
 
+			// done using the more modern waitgroup.Go()
 			// waitGroup.Go(func() {
 			// 	// defer waitGroup.Done()
 			// 	work(ctx, logger, batch, sem) // allErrors
@@ -257,12 +259,12 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 		return errs
 	}
 
-	logger.Info("finished writing batch items: ",
+	clients.Logger.Info("finished writing batch items: ",
 		zap.Any("batch-services", requests),
 	)
 
 	endTime := time.Now()
-	logging.LogTimeTaken(logger, startTime, endTime)
+	logging.LogTimeTaken(clients.Logger, startTime, endTime)
 
 	return nil
 }
@@ -276,7 +278,7 @@ type dynamoRetryItem struct {
 const MAX_RETRY_LIMIT = 3
 const RETRY_TIME_LIMIT = time.Second * 15
 
-func (clients *Clients) RetryDynamoUnprocessedItems(ctx context.Context, logger zap.Logger, unprocessedItems *dynamoRetryItem) (*dynamoRetryItem, error) {
+func (clients *Clients) RetryDynamoUnprocessedItems(ctx context.Context, unprocessedItems *dynamoRetryItem) (*dynamoRetryItem, error) {
 	if unprocessedItems == nil || len(unprocessedItems.items) == 0 {
 		return unprocessedItems, nil
 	}
@@ -288,7 +290,7 @@ func (clients *Clients) RetryDynamoUnprocessedItems(ctx context.Context, logger 
 		case <-timer.C:
 		case <-ctx.Done():
 			timer.Stop()
-			return unprocessedItems, fmt.Errorf("context was canceled")
+			return unprocessedItems, fmt.Errorf("retry canceled: %w", ctx.Err())
 		}
 
 		opt, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
@@ -305,6 +307,9 @@ func (clients *Clients) RetryDynamoUnprocessedItems(ctx context.Context, logger 
 		unprocessedItems.retries++
 		unprocessedItems.lastTried = time.Now()
 
+		if len(unprocessedItems.items) == 0 {
+			return nil, nil
+		}
 	}
 
 	if unprocessedItems != nil && len(unprocessedItems.items) > 0 {

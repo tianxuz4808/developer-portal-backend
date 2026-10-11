@@ -61,9 +61,10 @@ func main() {
 	myService := services.NewService("my-service", "matthew")
 	clients := api.Clients{
 		DynamoClient: svc,
+		Logger:       *logger,
 	}
 
-	err = clients.WriteService(mainCtx, *logger, myService)
+	err = clients.WriteService(mainCtx, myService)
 	if err != nil {
 		logger.Fatal("Failed to write the service to storage",
 			zap.Error(err),

@@ -33,11 +33,12 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 
 	clients := api.Clients{
 		DynamoClient: &s.DynamodbClient,
+		Logger: logger,
 	}
 
 	mux.Handle("GET /services/list/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		services, err := clients.ListServices(ctx, logger)
+		services, err := clients.ListServices(ctx)
 		if err != nil {
 			strErr := fmt.Sprintf("There was an error processing your request: ", err.Error())
 			w.Write([]byte(strErr))
@@ -65,7 +66,7 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 			zap.Any("batch-services", batchServices),
 		)
 
-		errs := clients.CreateBatchServices(ctx, logger, batchServices)
+		errs := clients.CreateBatchServices(ctx, batchServices)
 		if len(errs) > 0 {
 			errStr := fmt.Sprintf("There was an issue processing one or more of your batch write items request")
 			http.Error(w, errStr, 500)
