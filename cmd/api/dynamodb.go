@@ -224,7 +224,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 				}
 				retryItem := dynamoRetryItem{
 					items:     unprocessedItems,
-					numTries:  1,
+					retries:   0,
 					lastTried: time.Now(),
 				}
 				clients.RetryDynamoUnprocessedItems(ctx, logger, &retryItem)
@@ -269,7 +269,7 @@ func (clients *Clients) CreateBatchServices(ctx context.Context, logger zap.Logg
 
 type dynamoRetryItem struct {
 	items     []types.WriteRequest
-	numTries  int
+	retries   int
 	lastTried time.Time
 }
 
@@ -277,38 +277,39 @@ const MAX_RETRY_LIMIT = 3
 const RETRY_TIME_LIMIT = time.Second * 15
 
 func (clients *Clients) RetryDynamoUnprocessedItems(ctx context.Context, logger zap.Logger, unprocessedItems *dynamoRetryItem) (*dynamoRetryItem, error) {
-	if unprocessedItems == nil {
-		return nil, nil
+	if unprocessedItems == nil || len(unprocessedItems.items) == 0 {
+		return unprocessedItems, nil
 	}
 
-	if unprocessedItems.numTries >= 3 {
-		return unprocessedItems, fmt.Errorf("Unable to process your batch write. Maximum number of retries attempted to dynamo")
+	for range MAX_RETRY_LIMIT {
+
+		timer := time.NewTimer(RETRY_TIME_LIMIT)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return unprocessedItems, fmt.Errorf("context was canceled")
+		}
+
+		opt, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
+			RequestItems: map[string][]types.WriteRequest{
+				TABLE_NAME: unprocessedItems.items,
+			},
+		})
+
+		if err != nil {
+			return unprocessedItems, err
+		}
+
+		unprocessedItems.items = opt.UnprocessedItems[TABLE_NAME]
+		unprocessedItems.retries++
+		unprocessedItems.lastTried = time.Now()
+
 	}
 
-	unprocessedTime := unprocessedItems.lastTried
-	timeToProcessAgain := unprocessedTime.Add(RETRY_TIME_LIMIT)
-
-	if time.Now().Compare(timeToProcessAgain) == -1 {
-		logger.Info("we are sleeping until we are allowed to write to dynamo again based off the RETRY_TIME_LIMIT")
+	if unprocessedItems != nil && len(unprocessedItems.items) > 0 {
+		return unprocessedItems, fmt.Errorf("Unable to process %d of your items", len(unprocessedItems.items))
 	}
 
-	for time.Now().Compare(timeToProcessAgain) == -1 {
-
-	}
-
-	opt, err := clients.DynamoClient.BatchWriteItem(ctx, &dynamodb.BatchWriteItemInput{
-		RequestItems: map[string][]types.WriteRequest{
-			TABLE_NAME: unprocessedItems.items,
-		},
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	unprocessedItems.items = opt.UnprocessedItems[TABLE_NAME]
-	unprocessedItems.numTries += 1
-	unprocessedItems.lastTried = time.Now()
-
-	return clients.RetryDynamoUnprocessedItems(ctx, logger, unprocessedItems)
+	return nil, nil
 }
