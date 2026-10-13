@@ -1,9 +1,12 @@
 package dynamodb
 
 import (
+	"context"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/google/uuid"
+	"github.com/tianxuz4808/developer-portal-backend/internal/repo"
 	"github.com/tianxuz4808/developer-portal-backend/internal/service"
 )
 
@@ -35,4 +38,20 @@ func (dss *DynamoStorageService) ConvToService() (service.Service, error) {
 		Owner:     dss.Owner,
 		CreatedAt: dss.CreatedAt,
 	}, nil
+}
+
+type DynamoClient struct {
+	Client dynamodb.Client
+}
+
+func NewDynamoClient(dc DynamoClient) repo.Repo {
+	return 	dc
+}
+
+func (dc DynamoClient) List(ctx context.Context) ([]service.Service, error) {
+	return nil, nil
+}
+
+func (dc DynamoClient) Write(ctx context.Context, service []service.Service) []error {
+	return nil
 }

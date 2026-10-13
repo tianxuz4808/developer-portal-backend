@@ -23,3 +23,7 @@ func NewService(name string, owner string) Service {
 		CreatedAt: time.Now(),
 	}
 }
+
+type Clients struct {
+	
+}
