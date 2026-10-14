@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/tianxuz4808/developer-portal-backend/cmd/server"
+	"github.com/tianxuz4808/developer-portal-backend/internal/server"
 
 	iDynamo "github.com/tianxuz4808/developer-portal-backend/internal/dynamodb"
 	"go.uber.org/zap"

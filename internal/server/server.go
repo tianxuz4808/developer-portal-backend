@@ -28,7 +28,6 @@ func NewServer(serviceRepo repo.ServiceRepo) Server {
 
 func (s *server) Run(ctx context.Context, logger zap.Logger) {
 	log.Println("starting server...")
-	log.Println("haha")
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /services/list/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -62,8 +61,6 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 			zap.Any("batch-services", batchServices),
 		)
 
-		//errs := s.DynamodbClient.Write(ctx, batchServices)
-		// errs := clients.CreateBatchServices(ctx, batchServices)
 		errs := s.ServiceRepo.Write(ctx, batchServices)
 		if len(errs) > 0 {
 			errStr := fmt.Sprintf("There was an issue processing one or more of your batch write items request")

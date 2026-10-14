@@ -11,7 +11,9 @@ COPY . .
 
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
-RUN go build -gcflags="all=-N -l" -o developer-portal-backend
+RUN ls
+
+RUN go build -gcflags="all=-N -l" -o developer-portal-backend ./cmd/server/main.go
 
 # stage 2: run the go binary
 # Taks: This involves creating a new stage, retrieving the built go binary, 

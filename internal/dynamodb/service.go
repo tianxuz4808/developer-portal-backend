@@ -110,7 +110,7 @@ func (dc DynamoClient) Write(ctx context.Context, batchServices []domain.Service
 	startTime := time.Now()
 
 	for _, service := range batchServices {
-		newService := domain.NewService(service.Name, service.Owner)
+		newService := domain.NewService(service.Name, service.Owner, service.Dependencies)
 		// requestService, err := attributevalue.MarshalMap(dynamoService.ConvFromService(newService))
 		putItem, err := serviceToDynamoWriteRequest(newService)
 		if err != nil {
@@ -269,7 +269,7 @@ func (dc DynamoClient) RetryDynamoUnprocessedItems(ctx context.Context, unproces
 		}
 	}
 
-	if unprocessedItems != nil && len(unprocessedItems.items) > 0 {
+	if len(unprocessedItems.items) > 0 {
 		return unprocessedItems, fmt.Errorf("Unable to process %d of your items", len(unprocessedItems.items))
 	}
 
