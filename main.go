@@ -9,10 +9,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/tianxuz4808/developer-portal-backend/cmd/api"
 	"github.com/tianxuz4808/developer-portal-backend/cmd/server"
 
-	services "github.com/tianxuz4808/developer-portal-backend/internal/service"
+	iDynamo "github.com/tianxuz4808/developer-portal-backend/internal/dynamodb"
 	"go.uber.org/zap"
 )
 
@@ -58,20 +57,11 @@ func main() {
 		)
 	}
 
-	myService := services.NewService("my-service", "matthew")
-	clients := api.Clients{
-		DynamoClient: svc,
-		Logger:       *logger,
-	}
-
-	err = clients.WriteService(mainCtx, myService)
-	if err != nil {
-		logger.Fatal("Failed to write the service to storage",
-			zap.Error(err),
-		)
-	}
-
-	server := server.NewServer(*clients.DynamoClient)
+	serviceRepo := iDynamo.NewDynamoRepo(iDynamo.DynamoClient{
+		Client: svc,
+		Logger: logger,
+	})
+	server := server.NewServer(serviceRepo)
 	server.Run(mainCtx, *logger)
 
 	log.Println("added a service")
