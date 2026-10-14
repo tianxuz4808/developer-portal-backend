@@ -28,6 +28,7 @@ func NewServer(serviceRepo repo.ServiceRepo) Server {
 
 func (s *server) Run(ctx context.Context, logger zap.Logger) {
 	log.Println("starting server...")
+	log.Println("haha")
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /services/list/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
