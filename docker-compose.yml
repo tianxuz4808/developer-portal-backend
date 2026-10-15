@@ -43,5 +43,10 @@ services:
   dynamodb-local:
     build: ./dynamodb_local_latest
     image: dynamodb_local
-    ports: 
+    ports:
       - "8000:8000"
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+
+volumes:
+  dynamodb_data:

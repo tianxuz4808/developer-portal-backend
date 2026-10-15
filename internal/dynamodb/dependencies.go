@@ -29,9 +29,19 @@ func NewDynamoDependencyClient(client *dynamodb.Client, logger *zap.Logger) repo
 const DEPENDENCIES_TABLE_NAME = "dependencies"
 
 func (ddc DynamoDependencyClient) List(ctx context.Context) ([]domain.Dependency, error) {
+	
 	return nil, nil
 }
 
+func (ddc DynamoDependencyClient) RemoveDependecy(ctx context.Context, dep domain.Dependency) error {
+	// 
+	return nil
+}
+
 func (ddc DynamoDependencyClient) AddDependencies(ctx context.Context, dep []domain.Dependency) error {
+	// steps: 
+	// 1. verify the source Service exists.
+	// 2. Add or update the `dependencies` table by appending the list of dependencies
+	// 3. If I fail to add a single dependency i should fail adding any dependency to the table
 	return nil
 }
