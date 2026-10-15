@@ -1,6 +1,8 @@
 package domain
 
-type Dependencies struct {
-	Source    *Service  `json:"source" dynamodbav:"source"`
-	DependsOn []Service `json:"depends_on" dyamodbav:"depends_on"`
+import "github.com/google/uuid"
+
+type Dependency struct {
+	SourceID  uuid.UUID
+	DependsOn []uuid.UUID
 }

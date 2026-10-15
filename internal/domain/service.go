@@ -11,12 +11,12 @@ type Service struct {
 	ID           uuid.UUID      `json:"id" dynamodbav:"id"`
 	Name         string         `json:"name" dynamodbav:"name"`
 	Owner        string         `json:"owner" dynamodbav:"owner"`
-	Dependencies []Dependencies `json:"dependencies" dynamodbav:"dependencies"`
+	Dependencies []Dependency `json:"dependencies" dynamodbav:"dependencies"`
 	CreatedAt    time.Time      `json:"created_at" dynamodbav:"created_at"`
 }
 
 // NewService func
-func NewService(name string, owner string, dependencies []Dependencies) Service {
+func NewService(name string, owner string, dependencies []Dependency) Service {
 	return Service{
 		ID:           uuid.New(),
 		Name:         name,
