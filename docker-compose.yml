@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   developer-portal-backend:
     build: .
@@ -12,7 +10,8 @@ services:
       AWS_REGION: us-east-1
       DYNAMODB_ENDPOINT: http://dynamodb-local:8000
     depends_on:
-      - dynamodb-local
+      dynamodb-local:
+        condition: service_healthy
 
   developer-portal-debug:
     build: .
@@ -38,11 +37,17 @@ services:
       - seccomp:unconfined
     cap_add:
       - SYS_PTRACE
-    depends_on: 
-      - dynamodb-local
+    ## depends_on: 
+    ##   dynamodb-local:
+    ##     condition: service_healthy
   dynamodb-local:
     build: ./dynamodb_local_latest
     image: dynamodb_local
+    healthcheck:
+      test: ["CMD-SHELL", "sleep 0.2 || exit 0"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
     ports:
       - "8000:8000"
     volumes:

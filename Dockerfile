@@ -11,8 +11,6 @@ COPY . .
 
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
-RUN ls
-
 RUN go build -gcflags="all=-N -l" -o developer-portal-backend ./cmd/server/main.go
 
 # stage 2: run the go binary
@@ -22,7 +20,9 @@ FROM alpine:latest
 
 COPY --from=builder /go/bin/dlv /usr/local/bin/dlv
 COPY --from=builder /app/developer-portal-backend /developer-portal-backend
+# debugger port
 EXPOSE 40000
+# dev port
 EXPOSE 8080
 
 # CMD ["dlv", "exec", "/developer-portal-backend", "--headless", "--listen=:40000", "--api-version=2", "--accept-multiclient"]
