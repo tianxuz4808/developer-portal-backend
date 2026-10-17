@@ -20,17 +20,37 @@ import (
 const TABLE_NAME = "services"
 
 type DynamoStorageService struct {
-	ID        string    `json:"id" dynamodbav:"id"`
-	Name      string    `json:"name" dynamodbav:"name"`
-	Owner     string    `json:"owner" dynamodbav:"owner"`
+	ID    string `json:"id" dynamodbav:"id"`
+	Name  string `json:"name" dynamodbav:"name"`
+	Owner string `json:"owner" dynamodbav:"owner"`
+
+	Team         string   `json:"team" dynamodbav:"team"`
+	Dependencies []string `json:"dependencies" dynamodbav:"dependencies"`
+
+	Type           string `json:"type" dynamodbav:"type"`
+	Environment    string `json:"environment" dynamodbav:"environment"`
+	HealthCheckURL string `json:"health_check_url" dynamodbav:"health_check_url"`
+
 	CreatedAt time.Time `json:"created_at" dynamodbav:"created_at"`
 }
 
 func toDynamoStorageService(s domain.Service) DynamoStorageService {
+	dependenciesStr := []string{}
+	for _, dep := range s.Dependencies {
+		dependenciesStr = append(dependenciesStr, dep.String())
+	}
 	return DynamoStorageService{
-		ID:        s.ID.String(),
-		Name:      s.Name,
-		Owner:     s.Owner,
+		ID:    s.ID.String(),
+		Name:  s.Name,
+		Owner: s.Owner,
+		Team:  s.Team,
+
+		Dependencies: dependenciesStr,
+
+		Type:           s.Type,
+		Environment:    s.Environment,
+		HealthCheckURL: s.HealthCheckURL,
+
 		CreatedAt: s.CreatedAt,
 	}
 }
@@ -41,10 +61,27 @@ func (dss *DynamoStorageService) toDomainService() (domain.Service, error) {
 		return domain.Service{}, err
 	}
 
+	dependencies := []uuid.UUID{}
+	for _, depStrID := range dss.Dependencies {
+		depID, err := uuid.Parse(depStrID)
+		if err != nil {
+			return domain.Service{}, err
+		}
+		dependencies = append(dependencies, depID)
+	}
+
 	return domain.Service{
-		ID:        id,
-		Name:      dss.Name,
-		Owner:     dss.Owner,
+		ID:    id,
+		Name:  dss.Name,
+		Owner: dss.Owner,
+		Team:  dss.Team,
+
+		Dependencies: dependencies,
+
+		Type:           dss.Type,
+		Environment:    dss.Environment,
+		HealthCheckURL: dss.HealthCheckURL,
+
 		CreatedAt: dss.CreatedAt,
 	}, nil
 }
@@ -101,18 +138,46 @@ func serviceToDynamoWriteRequest(service domain.Service) (types.WriteRequest, er
 	return writeRequest, nil
 }
 
+func (dc DynamoClient) Write(ctx context.Context, service domain.Service) error {
+	// Steps:
+	//	1. create the service using NewService
+	//	1. convert service to dynamo item
+	// 	1. call putItem
+	// 	2. profit?
+	dynamoItem := toDynamoStorageService(service)
+	attributeItem, err := attributevalue.MarshalMap(dynamoItem)
+	if err != nil {
+		return err
+	}
+	putItemParams := dynamodb.PutItemInput{
+		Item:      attributeItem,
+		TableName: aws.String(TABLE_NAME),
+	}
+	output, err := dc.Client.PutItem(ctx, &putItemParams)
+
+	if err != nil {
+		return err
+	}
+
+	metadata := output.ResultMetadata
+	dc.Logger.Info("The result metadata from the putItem operation is: ",
+		zap.Any("metadata", metadata),
+	)
+
+	return nil
+}
+
 const AWS_DYNAMODB_BATCH_LIMIT = 20
 
-func (dc DynamoClient) Write(ctx context.Context, batchServices []domain.Service) []error {
+func (dc DynamoClient) WriteBatch(ctx context.Context, batchServices []domain.Service) []error {
 	requests := []types.WriteRequest{}
 
 	// this is the real logical block when i want i remove the if above
 	startTime := time.Now()
 
 	for _, service := range batchServices {
-		newService := domain.NewService(service.Name, service.Owner, service.Dependencies)
 		// requestService, err := attributevalue.MarshalMap(dynamoService.ConvFromService(newService))
-		putItem, err := serviceToDynamoWriteRequest(newService)
+		putItem, err := serviceToDynamoWriteRequest(service)
 		if err != nil {
 			return []error{err}
 		}

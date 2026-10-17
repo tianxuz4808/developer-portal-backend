@@ -10,5 +10,6 @@ import (
 
 type ServiceRepo interface {
 	List(context.Context) ([]domain.Service, error)
-	Write(context.Context, []domain.Service) []error // write happens in batches so i expect an error of errors?
+	WriteBatch(context.Context, []domain.Service) []error // write happens in batches so i expect an error of errors?
+	Write(context.Context, domain.Service) error
 }

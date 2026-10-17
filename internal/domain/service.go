@@ -1,57 +1,64 @@
 package domain
 
 import (
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+// Service name
+// 	- deployed-environment
+// 	- dependencies
+// 	- health_check_url
+// 	- owner
+// 	- team
+// 	- type?
+// 		- This could be database, api, etc.
+
 // Service struct
 type Service struct {
-	ID           uuid.UUID      `json:"id" dynamodbav:"id"`
-	Name         string         `json:"name" dynamodbav:"name"`
-	Owner        string         `json:"owner" dynamodbav:"owner"`
-	Dependencies []Dependency `json:"dependencies" dynamodbav:"dependencies"`
-	CreatedAt    time.Time      `json:"created_at" dynamodbav:"created_at"`
-}
+	ID           uuid.UUID   `json:"id" dynamodbav:"id"`
+	Name         string      `json:"name" dynamodbav:"name"`
+	Owner        string      `json:"owner" dynamodbav:"owner"`
+	Team         string      `json:"team" dynamodbav:"team"`
+	Dependencies []uuid.UUID `json:"dependencies" dynamodbav:"dependencies"`
 
-// NewService func
-func NewService(name string, owner string, dependencies []Dependency) Service {
-	return Service{
-		ID:           uuid.New(),
-		Name:         name,
-		Owner:        owner,
-		CreatedAt:    time.Now(),
-		Dependencies: dependencies,
-	}
-}
+	Type           string `json:"type" dynamodbav:"type"`
+	Environment    string `json:"environment" dynamodbav:"environment"`
+	HealthCheckURL string `json:"health_check_url" dynamodbav:"health_check_url"`
 
-type DynamoStorageService struct {
-	ID        string    `json:"id" dynamodbav:"id"`
-	Name      string    `json:"name" dynamodbav:"name"`
-	Owner     string    `json:"owner" dynamodbav:"owner"`
 	CreatedAt time.Time `json:"created_at" dynamodbav:"created_at"`
 }
 
-func ConvFromService(s Service) DynamoStorageService {
-	return DynamoStorageService{
-		ID:        s.ID.String(),
-		Name:      s.Name,
-		Owner:     s.Owner,
-		CreatedAt: s.CreatedAt,
-	}
-}
+// NewService func
+func NewService(s Service) (Service, error) {
 
-func (dss *DynamoStorageService) ConvToService() (Service, error) {
-	id, err := uuid.Parse(dss.ID)
-	if err != nil {
-		return Service{}, err
+	if len(s.Name) <= 0 {
+		return Service{}, errors.New("cannot have an empty name")
+	}
+
+	if len(s.Type) <= 0 {
+		return Service{}, errors.New("cannot have an empty type")
+	}
+
+	if len(s.Owner) <= 0 {
+		return Service{}, errors.New("cannot have an empty owner")
+	}
+
+	if len(s.Team) <= 0 {
+		return Service{}, errors.New("cannot have an empty team")
 	}
 
 	return Service{
-		ID:        id,
-		Name:      dss.Name,
-		Owner:     dss.Owner,
-		CreatedAt: dss.CreatedAt,
+		ID:             uuid.New(),
+		Name:           s.Name,
+		Owner:          s.Owner,
+		Team:           s.Team,
+		Dependencies:   s.Dependencies,
+		Type:           s.Type,
+		Environment:    s.Environment,
+		HealthCheckURL: s.HealthCheckURL,
+		CreatedAt:      time.Now(),
 	}, nil
 }

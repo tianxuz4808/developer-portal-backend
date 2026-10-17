@@ -1,10 +1,6 @@
-[
-  {
-    "name": "service1",
-    "owner": "matt"
-  },
-  {
-    "name": "service2",
-    "owner": "john"
-  }
-]
+{
+  "name": "service1",
+  "owner": "matt",
+  "type": "api",
+  "team": "platform"
+}
