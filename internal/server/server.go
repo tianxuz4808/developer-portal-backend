@@ -166,8 +166,27 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 		if err != nil {
 			http.Error(w, "encountered an error with your request body", 500)
 		}
-
 		logger.Info("req body is: ", zap.Any("request_body", reqBody))
+
+		exists, service, err := s.ServiceRepo.Exists(ctx, reqBody.SourceID)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+		if !exists {
+			w.Write([]byte("The id is not linked to a service"))
+			return
+		}
+
+		item, err := json.Marshal(service)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+		logger.Info("the service retrieved checking before adding the dependency is", zap.Any("service", service))
+		w.Write(item)
 	}))
 
 	err := http.ListenAndServe(":8080", mux)
