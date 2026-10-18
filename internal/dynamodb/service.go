@@ -109,8 +109,15 @@ func (dc DynamoClient) List(ctx context.Context) ([]domain.Service, error) {
 
 	allServices := []domain.Service{}
 	for i, unmarshaledServices := range op.Items {
-		var service domain.Service
-		attributevalue.UnmarshalMap(unmarshaledServices, &service)
+		var storageService DynamoStorageService
+		err := attributevalue.UnmarshalMap(unmarshaledServices, &storageService)
+		if err != nil {
+			return nil, err
+		}
+		service, err := storageService.toDomainService()
+		if err != nil {
+			return nil, err
+		}
 		allServices = append(allServices, service)
 		dc.Logger.Info("",
 			zap.Int("record", i),
@@ -144,6 +151,7 @@ func (dc DynamoClient) Write(ctx context.Context, service domain.Service) error 
 	//	1. convert service to dynamo item
 	// 	1. call putItem
 	// 	2. profit?
+	dc.Logger.Info("the service to write is: ", zap.Any("service", service))
 	dynamoItem := toDynamoStorageService(service)
 	attributeItem, err := attributevalue.MarshalMap(dynamoItem)
 	if err != nil {
@@ -159,10 +167,30 @@ func (dc DynamoClient) Write(ctx context.Context, service domain.Service) error 
 		return err
 	}
 
+	dc.Logger.Info("the service written was: ", zap.Any("service", output.Attributes))
+
 	metadata := output.ResultMetadata
 	dc.Logger.Info("The result metadata from the putItem operation is: ",
 		zap.Any("metadata", metadata),
 	)
+
+	return nil
+}
+
+func (dc DynamoClient) Delete(ctx context.Context, id string) error {
+	// dc.Client.DeleteItem()
+	pk, err := attributevalue.MarshalMap(map[string]string{"id": id})
+	if err != nil {
+		return err
+	}
+
+	_, err = dc.Client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		Key:       pk,
+		TableName: aws.String(TABLE_NAME),
+	})
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

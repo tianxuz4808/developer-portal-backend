@@ -34,15 +34,20 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 		defer r.Body.Close()
 		// services, err := s.DynamodbClient.List(ctx)
 		services, err := s.ServiceRepo.List(ctx)
-		// services, err := clients.ListServices(ctx)
 		if err != nil {
 			strErr := fmt.Sprintf("There was an error processing your request: ", err.Error())
 			w.Write([]byte(strErr))
 			return
 		}
 
-		retStr := fmt.Sprintf("The amount of services collected are: ", len(services))
-		w.Write([]byte(retStr))
+		logger.Info("the services returned by dynamo are: ", zap.Any("services_list", services))
+
+		marshaledService, err := json.Marshal(services)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Write(marshaledService)
 	}))
 
 	mux.Handle("POST /services/write/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +75,16 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 		_, err = w.Write([]byte("success"))
 		if err != nil {
 			logger.Error("error writing success for some reason?", zap.Error(err))
+			return
+		}
+	}))
+
+	mux.Handle("POST /services/delete/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serviceID := r.PathValue("id")
+
+		err := s.ServiceRepo.Delete(ctx, serviceID)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
 			return
 		}
 	}))
