@@ -123,6 +123,22 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 		}
 	}))
 
+	mux.Handle("POST /dependencies/add/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// decode the request body -- DONE
+		// check to make sure whether the source service exists FROM services table
+		// check to make sure the target dependent exists FROM dependencies table
+		// if either are false return an error to the user
+		// on happy, insert the batch items into dynamo?
+		defer r.Body.Close()
+		var reqBody domain.Dependency
+		err := json.NewDecoder(r.Body).Decode(&reqBody)
+		if err != nil {
+			http.Error(w, "encountered an error with your request body", 500)
+		}
+
+		logger.Info("req body is: ", zap.Any("request_body", reqBody))
+	}))
+
 	err := http.ListenAndServe(":8080", mux)
 	if err != nil {
 		log.Fatal(err)
