@@ -2,6 +2,7 @@ package dynamodb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/google/uuid"
 	"github.com/tianxuz4808/developer-portal-backend/internal/domain"
 	"github.com/tianxuz4808/developer-portal-backend/internal/logging"
@@ -193,6 +195,53 @@ func (dc DynamoClient) Delete(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+func (dc DynamoClient) Exists(ctx context.Context, id uuid.UUID) (bool, domain.Service, error) {
+	dc.Logger.Info("The id to be retrieved is: ", zap.Any("id", id))
+	keyCondition := expression.Key("id").Equal(expression.Value(id.String()))
+	builtExpression, err := expression.NewBuilder().WithKeyCondition(keyCondition).Build()
+	if err != nil {
+		return false, domain.Service{}, err
+	}
+
+	dc.Logger.Info("the built expression is", zap.Any("expr", builtExpression))
+	params := dynamodb.QueryInput{
+		TableName:                 aws.String(TABLE_NAME),
+		KeyConditionExpression:    builtExpression.KeyCondition(),
+		ExpressionAttributeNames:  builtExpression.Names(),
+		ExpressionAttributeValues: builtExpression.Values(),
+	}
+	output, err := dc.Client.Query(ctx, &params)
+	if err != nil {
+		return false, domain.Service{}, err
+	}
+
+	if len(output.Items) > 1 {
+		return true, domain.Service{}, errors.New("returned multiple service for a given id")
+	}
+
+	if len(output.Items) <= 0 {
+		return false, domain.Service{}, nil
+	}
+
+	var service domain.Service
+	for _, item := range output.Items {
+		var dynamoService DynamoStorageService
+		err := attributevalue.UnmarshalMap(item, &dynamoService)
+		if err != nil {
+			return false, domain.Service{}, err
+		}
+
+		service, err = dynamoService.toDomainService()
+		if err != nil {
+			return true, domain.Service{}, err
+		}
+	}
+
+	// TODO: implement a check to see if service is an empty domain.Service{}
+
+	return true, service, nil
 }
 
 const AWS_DYNAMODB_BATCH_LIMIT = 20

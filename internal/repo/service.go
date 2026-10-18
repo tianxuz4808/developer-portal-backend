@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/tianxuz4808/developer-portal-backend/internal/domain"
 )
 
@@ -13,4 +14,5 @@ type ServiceRepo interface {
 	WriteBatch(context.Context, []domain.Service) []error // write happens in batches so i expect an error of errors?
 	Write(context.Context, domain.Service) error
 	Delete(context.Context, string) error
+	Exists(context.Context, uuid.UUID) (bool, domain.Service, error)
 }

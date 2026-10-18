@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/tianxuz4808/developer-portal-backend/internal/domain"
 	"github.com/tianxuz4808/developer-portal-backend/internal/repo"
 	"go.uber.org/zap"
@@ -77,6 +78,36 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 			logger.Error("error writing success for some reason?", zap.Error(err))
 			return
 		}
+	}))
+
+	mux.Handle("GET /services/exists/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serviceStringID := r.PathValue("id")
+		serviceID, err := uuid.Parse(serviceStringID)
+
+		if err != nil {
+			logger.Error("there was an error parsing service string to uuid", zap.String("service_string_id", serviceStringID), zap.Any("service_uuid", serviceID))
+			http.Error(w, "there was an error parsing your service uuid", 500)
+			return
+		}
+
+		exists, service, err := s.ServiceRepo.Exists(ctx, serviceID)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+		if !exists {
+			w.Write([]byte("The id is not linked to a service"))
+			return
+		}
+
+		item, err := json.Marshal(service)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+		w.Write(item)
 	}))
 
 	mux.Handle("POST /services/delete/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
