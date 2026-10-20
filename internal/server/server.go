@@ -18,7 +18,8 @@ type Server interface {
 }
 
 type server struct {
-	ServiceRepo repo.ServiceRepo
+	ServiceRepo    repo.ServiceRepo
+	DependencyRepo repo.DependencyRepo
 }
 
 func NewServer(serviceRepo repo.ServiceRepo) Server {
@@ -161,32 +162,27 @@ func (s *server) Run(ctx context.Context, logger zap.Logger) {
 		// if either are false return an error to the user
 		// on happy, insert the batch items into dynamo?
 		defer r.Body.Close()
-		var reqBody domain.Dependency
+		var reqBody domain.DependencyParams
 		err := json.NewDecoder(r.Body).Decode(&reqBody)
 		if err != nil {
 			http.Error(w, "encountered an error with your request body", 500)
 		}
 		logger.Info("req body is: ", zap.Any("request_body", reqBody))
 
-		exists, service, err := s.ServiceRepo.Exists(ctx, reqBody.SourceID)
+		// TODO: I should probably verify whether the dependency service id also exists. if it does, then proceed, otherwise I should error, but im not doing all that rn
+
+		newDependency, err := domain.NewDependency(ctx, domain.DependencyParams{
+			SourceID:          reqBody.SourceID,
+			TargetDependentID: reqBody.TargetDependentID,
+		}, s.ServiceRepo.Exists) // add dependency
+
+		logger.Info("the dependency data is", zap.Any("dependency_info", newDependency))
+
+		err = s.DependencyRepo.Add(ctx, newDependency)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
-			return
 		}
-
-		if !exists {
-			w.Write([]byte("The id is not linked to a service"))
-			return
-		}
-
-		item, err := json.Marshal(service)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-
-		logger.Info("the service retrieved checking before adding the dependency is", zap.Any("service", service))
-		w.Write(item)
+		// w.Write(item)
 	}))
 
 	err := http.ListenAndServe(":8080", mux)

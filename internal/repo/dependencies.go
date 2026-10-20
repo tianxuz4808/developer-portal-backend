@@ -7,7 +7,7 @@ import (
 )
 
 type DependencyRepo interface {
-	List(context.Context) ([]domain.Dependency, error)
-	AddDependencies(context.Context, []domain.Dependency) error
+	List(context.Context) ([]domain.DependencyParams, error)
+	AddDependencies(context.Context, []domain.DependencyParams) error
+	Add(context.Context, domain.Dependency) error
 }
-
