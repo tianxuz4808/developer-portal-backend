@@ -9,9 +9,9 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
-	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/google/uuid"
 	"github.com/tianxuz4808/developer-portal-backend/internal/domain"
 	"github.com/tianxuz4808/developer-portal-backend/internal/logging"
@@ -93,7 +93,7 @@ type DynamoClient struct {
 	Logger *zap.Logger
 }
 
-func NewDynamoRepo(dc DynamoClient) repo.ServiceRepo {
+func NewDynamoSericeRepo(dc DynamoClient) repo.ServiceRepo {
 	return dc
 }
 
@@ -217,13 +217,15 @@ func (dc DynamoClient) Exists(ctx context.Context, id uuid.UUID) (bool, domain.S
 		return false, domain.Service{}, err
 	}
 
+	if output.Count == 0 {
+		return false, domain.Service{}, nil
+	}
+
 	if len(output.Items) > 1 {
 		return true, domain.Service{}, errors.New("returned multiple service for a given id")
 	}
 
-	if len(output.Items) <= 0 {
-		return false, domain.Service{}, nil
-	}
+	dc.Logger.Info("output items from exists check", zap.Any("output_items", output.Items))
 
 	var service domain.Service
 	for _, item := range output.Items {

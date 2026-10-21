@@ -57,11 +57,17 @@ func main() {
 		)
 	}
 
-	serviceRepo := iDynamo.NewDynamoRepo(iDynamo.DynamoClient{
+	serviceRepo := iDynamo.NewDynamoSericeRepo(iDynamo.DynamoClient{
 		Client: svc,
 		Logger: logger,
 	})
-	server := server.NewServer(serviceRepo)
+
+	dependencyRepo := iDynamo.NewDynamoDependencyClient(svc, logger)
+
+	server := server.NewServer(server.RepoClients{
+		ServiceRepo:    serviceRepo,
+		DependencyRepo: dependencyRepo,
+	})
 	server.Run(mainCtx, *logger)
 
 	log.Println("added a service")

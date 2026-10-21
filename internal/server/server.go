@@ -17,18 +17,16 @@ type Server interface {
 	Run(context.Context, zap.Logger)
 }
 
-type server struct {
+type RepoClients struct {
 	ServiceRepo    repo.ServiceRepo
 	DependencyRepo repo.DependencyRepo
 }
 
-func NewServer(serviceRepo repo.ServiceRepo) Server {
-	return &server{
-		ServiceRepo: serviceRepo,
-	}
+func NewServer(repoClients RepoClients) Server {
+	return &repoClients
 }
 
-func (s *server) Run(ctx context.Context, logger zap.Logger) {
+func (s *RepoClients) Run(ctx context.Context, logger zap.Logger) {
 	log.Println("starting server...")
 
 	mux := http.NewServeMux()

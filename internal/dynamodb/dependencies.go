@@ -3,6 +3,8 @@ package dynamodb
 import (
 	"context"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/tianxuz4808/developer-portal-backend/internal/domain"
 	"github.com/tianxuz4808/developer-portal-backend/internal/repo"
@@ -10,8 +12,8 @@ import (
 )
 
 type DynamoDependency struct {
-	SourceID          string
-	TargetDependentID string
+	SourceID          string `json:"source_id" dynamodbav:"source_id"`
+	TargetDependentID string `json:"target_dependent_id" dynamodbav:"target_dependent_id"`
 }
 
 type DynamoDependencyClient struct {
@@ -48,5 +50,24 @@ func (ddc DynamoDependencyClient) AddDependencies(ctx context.Context, dep []dom
 }
 
 func (ddc DynamoDependencyClient) Add(ctx context.Context, dep domain.Dependency) error {
+	// call dynamo putItem to add the single dependency. All of the ansillary stuff like checking whether the ids exist
+	// should already be taken care of
+
+	item, err := attributevalue.MarshalMap(dep)
+	if err != nil {
+		return err
+	}
+
+	output, err := ddc.Client.PutItem(ctx, &dynamodb.PutItemInput{
+		Item:      item,
+		TableName: aws.String(DEPENDENCIES_TABLE_NAME),
+	})
+
+	if err != nil {
+		return err
+	}
+
+	ddc.Logger.Info("the output metadata is", zap.Any("dependencies_putitem_output", output))
+
 	return nil
 }
