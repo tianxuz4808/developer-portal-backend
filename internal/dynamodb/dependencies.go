@@ -13,7 +13,7 @@ import (
 
 type DynamoDependency struct {
 	SourceID          string `json:"source_id" dynamodbav:"source_id"`
-	TargetDependentID string `json:"target_dependent_id" dynamodbav:"target_dependent_id"`
+	TargetDependentID string `json:"target_dependent_id" dynamodbav:"dependency_id"`
 }
 
 type DynamoDependencyClient struct {
@@ -51,12 +51,19 @@ func (ddc DynamoDependencyClient) AddDependencies(ctx context.Context, dep []dom
 
 func (ddc DynamoDependencyClient) Add(ctx context.Context, dep domain.Dependency) error {
 	// call dynamo putItem to add the single dependency. All of the ansillary stuff like checking whether the ids exist
-	// should already be taken care of
+	// should already be taken care of. The reason I pass the domain.Dependency obj is so I know dep exists
 
-	item, err := attributevalue.MarshalMap(dep)
+	dynamoItem := DynamoDependency{
+		SourceID:          dep.SourceService.ID.String(),
+		TargetDependentID: dep.TargetDependentService.ID.String(),
+	}
+
+	item, err := attributevalue.MarshalMap(dynamoItem)
 	if err != nil {
 		return err
 	}
+
+	ddc.Logger.Info("the item to be layed down is", zap.Any("item", item))
 
 	output, err := ddc.Client.PutItem(ctx, &dynamodb.PutItemInput{
 		Item:      item,

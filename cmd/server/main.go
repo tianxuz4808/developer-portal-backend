@@ -64,8 +64,9 @@ func main() {
 
 	dependencyRepo := iDynamo.NewDynamoDependencyClient(svc, logger)
 
+
 	server := server.NewServer(server.RepoClients{
-		ServiceRepo:    serviceRepo,
+		ServiceRepo: serviceRepo,	
 		DependencyRepo: dependencyRepo,
 	})
 	server.Run(mainCtx, *logger)
