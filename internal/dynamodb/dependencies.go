@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/google/uuid"
 	"github.com/tianxuz4808/developer-portal-backend/internal/domain"
 	"github.com/tianxuz4808/developer-portal-backend/internal/repo"
 	"go.uber.org/zap"
@@ -30,7 +31,22 @@ func NewDynamoDependencyClient(client *dynamodb.Client, logger *zap.Logger) repo
 
 const DEPENDENCIES_TABLE_NAME = "dependencies"
 
-func (ddc DynamoDependencyClient) List(ctx context.Context) ([]domain.DependencyParams, error) {
+func (ddc DynamoDependencyClient) GetByServiceID(ctx context.Context, serviceID uuid.UUID) ([]domain.Dependency, error) {
+	// NOTE: any of the checking before the write should happen BEFORE this function call. this function expects the serviceID to exist, if it doesn't bad things could happen
+	// do i call query or scan? Let's try to time it and see what happens
+
+	var queryInp dynamodb.QueryInput
+	queryInp = dynamodb.QueryInput{
+		TableName: aws.String(DEPENDENCIES_TABLE_NAME),
+	}
+
+	// calling by queryItem
+	opt, err := ddc.Client.Query(ctx, &queryInp)
+	if err != nil {
+		return []domain.Dependency{}, err
+	}
+
+	ddc.Logger.Info("the output from query is", zap.Any("query_item_output", opt))
 
 	return nil, nil
 }

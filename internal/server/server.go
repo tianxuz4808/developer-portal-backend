@@ -153,6 +153,10 @@ func (s *RepoClients) Run(ctx context.Context, logger zap.Logger) {
 		}
 	}))
 
+	mux.Handle("GET /services/{id}/dependencies/list", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// serviceID := r.PathValue("id")
+	}))
+
 	mux.Handle("POST /dependencies/add/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// decode the request body -- DONE
 		// check to make sure whether the source service exists FROM services table
@@ -179,8 +183,10 @@ func (s *RepoClients) Run(ctx context.Context, logger zap.Logger) {
 		err = s.DependencyRepo.Add(ctx, newDependency)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
+			return
 		}
-		// w.Write(item)
+
+		w.Write([]byte("the dependency was sucessfully added"))
 	}))
 
 	err := http.ListenAndServe(":8080", mux)
